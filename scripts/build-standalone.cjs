@@ -1,0 +1,11 @@
+const fs=require('node:fs'),path=require('node:path');
+const root=path.resolve(__dirname,'..'),read=f=>fs.readFileSync(path.join(root,'public','studio',f),'utf8');
+let html=read('index.html').replace("script-src 'self'","script-src 'unsafe-inline'").replace("connect-src 'self'","connect-src 'none'");
+html=html.replace('<link rel="stylesheet" href="styles.css">',()=>`<style>${read('styles.css')}</style>`).replace('<link rel="icon" href="icon.svg" type="image/svg+xml">',`<link rel="icon" href="data:image/svg+xml;base64,${Buffer.from(read('icon.svg')).toString('base64')}" type="image/svg+xml">`);
+for(const name of ['metrics.js','reports.js','app.js'])html=html.replace(`  <script defer src="${name}"></script>\n`,'');
+html=html.replace('  <script type="module" src="dataset-ui.mjs"></script>\n','');
+const escape=code=>code.replace(/<\//g,'<\\/');
+const prep=read('preprocess.mjs').replace('export default','return');
+const dataset=`(()=>{window.CMVS_PORTABLE=true;const P=(()=>{${prep}})();${read('dataset-ui.mjs').replace("import P from './preprocess.mjs';",'')}})();`;
+html=html.replace('</body>',()=>['metrics.js','reports.js','app.js'].map(f=>`<script>${escape(read(f))}</script>`).join('\n')+`\n<script>${escape(dataset)}</script>\n</body>`);
+fs.mkdirSync(path.join(root,'artifacts'),{recursive:true});fs.writeFileSync(path.join(root,'artifacts','Clinical_Model_Validation_Studio.html'),html);console.log('Built portable HTML with local preparation; database storage disabled.');
