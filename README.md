@@ -61,6 +61,15 @@ python tests/preprocessing_reference_check.py
 
 The optional Python checks need NumPy, SciPy, and scikit-learn. They generate fictional observations locally, download no datasets, and compare the JavaScript results with independent implementations. See [verification notes](docs/VERIFICATION.md) for checked behavior and remaining limits.
 
+Run the real-browser dataset workflow with:
+
+```sh
+pnpm exec playwright install --with-deps chromium
+npm run test:e2e
+```
+
+This suite generates fictional CSV files, copies source into a temporary directory, applies the checked migrations to a disposable local D1 database, and starts the existing loopback development sign-in flow. It never connects to a deployment or reuses your development database, uploads, environment files, or browser profile. It removes its temporary server and database when finished. Browser reports, fictional downloads and failure traces go into ignored `test-results/`; the CI job retains these artifacts for seven days. If Chromium cannot run in your environment, the suite fails rather than silently skipping browser coverage. An installed compatible Chrome executable can be selected with `CMVS_BROWSER_PATH`.
+
 ## Interpret results carefully
 
 A single random holdout is internal validation. Do not repeatedly tune settings against that holdout and present it as untouched evaluation. Repeated patients, clustered observations, temporal prediction, censoring, case-control sampling, and survey weights need methods beyond this version. Row bootstrap intervals keep model predictions fixed; they do not include model-development uncertainty.

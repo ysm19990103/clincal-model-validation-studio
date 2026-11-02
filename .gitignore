@@ -19,6 +19,8 @@ next-env.d.ts
 
 # Test output
 /coverage/
+test-results/
+playwright-report/
 
 # Package-manager logs
 npm-debug.log*

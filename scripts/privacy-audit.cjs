@@ -11,7 +11,7 @@ const patterns = [
 const issues = []; let checked = 0;
 function walk(dir) {
   for (const item of fs.readdirSync(dir, { withFileTypes: true })) {
-    if (['.git', '.openai', 'node_modules', 'artifacts', '.local', '__pycache__', '.sites-runtime', '.wrangler', 'dist', '.vinext', '.next', '.agents', '.codex'].includes(item.name)) continue;
+    if (['.git', '.openai', 'node_modules', 'artifacts', '.local', '__pycache__', '.sites-runtime', '.wrangler', 'dist', '.vinext', '.next', '.agents', '.codex', 'test-results', 'playwright-report'].includes(item.name)) continue;
     const file = path.join(dir, item.name), rel = path.relative(root, file);
     if (item.isDirectory()) { walk(file); continue; }
     if (/^\.env(?:\.|$)/.test(item.name) || /\.(?:pem|key|dcm|xlsx|parquet|sqlite|db)$/i.test(item.name)) issues.push({ file: rel, kind: 'Sensitive configuration or data file' });
