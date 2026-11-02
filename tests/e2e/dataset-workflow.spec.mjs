@@ -100,7 +100,9 @@ test('external CSV to saved preparation, fresh-session reopening, fitting and ev
   expect((await prepResponse).status()).toBe(200);
   await expect(page.locator('#save-prepared')).toBeEnabled();
   const stored = await (await page.request.get('/api/datasets/' + saved.id)).json();
-  expect(stored.csv).toBe(fictionalCSV());
+  // Blob.text() decodes UTF-8 and consumes a leading BOM; all decoded content
+  // (including CRLF, missing tokens and original category labels) is preserved.
+  expect(stored.csv).toBe(new TextDecoder().decode(new TextEncoder().encode(fictionalCSV())));
   expect(stored.config).toEqual(before.config);
   expect(stored.revision).toBe(2);
 
@@ -109,6 +111,9 @@ test('external CSV to saved preparation, fresh-session reopening, fitting and ev
   try {
     const reopened = await fresh.newPage();
     reopened.on('pageerror', error => pageErrors.push(error.message));
+    reopened.on('request', request => {
+      if (/^https?:/.test(request.url()) && new URL(request.url()).origin !== new URL(process.env.CMVS_E2E_BASE_URL).origin) external.push(request.url());
+    });
     await reopened.goto(process.env.CMVS_E2E_BASE_URL + datasetURL);
     await expect(reopened.locator('#storage-status')).toHaveText('SIGN IN TO SAVE');
     expect((await fresh.request.get(process.env.CMVS_E2E_BASE_URL + '/api/datasets/' + saved.id)).status()).toBe(401);
@@ -210,6 +215,41 @@ test('malformed import, multicategory guard, stale saves and anonymous access fa
     headers: { origin: 'https://example.invalid' }, data: { revision: 2, archived: true },
   });
   expect(forged.status()).toBe(403);
+  // Archiving is reversible and must preserve the saved preparation.
+  await page.locator(`[data-open="${record.id}"]`).click();
+  await expect(page.locator('#prep-results')).toBeVisible();
+  await expect(page.locator('#run-preprocess')).toBeEnabled();
+  await page.locator(`[data-archive="${record.id}"]`).click();
+  await expect(page.locator(`[data-open="${record.id}"]`)).toHaveCount(0);
+  await page.locator('#show-archived').check();
+  await expect(page.locator(`[data-archive="${record.id}"]`)).toHaveText('Restore');
+  await page.locator(`[data-archive="${record.id}"]`).click();
+  await page.locator(`[data-open="${record.id}"]`).click();
+  await expect(page.locator('#prep-results')).toBeVisible();
+  await expect(page.locator('#split-seed')).toHaveValue('73');
+});
+
+test('local sign-in strips forged identity headers and rejects cross-site sign-in', async ({ page }) => {
+  const spoofed = await page.request.get('/api/session', { headers: {
+    'oai-authenticated-user-id': 'fictional-forgery',
+    'oai-authenticated-user-email': 'forgery@example.invalid',
+  } });
+  expect(await spoofed.json()).toEqual({ authenticated: false });
+  const blocked = await page.request.get('/signin-with-chatgpt', {
+    headers: { origin: 'https://example.invalid', 'sec-fetch-site': 'cross-site' }, maxRedirects: 0,
+  });
+  expect(blocked.status()).toBe(403);
+  expect((await page.request.get('/api/datasets')).status()).toBe(401);
+});
+
+test('synthetic example and template downloads remain available', async ({ page }, testInfo) => {
+  await page.goto('/studio/index.html');
+  const data = Prep.parse((await exportFile(page, '#export-data', testInfo, 'synthetic-validation-data.csv')).toString());
+  expect(data.rows).toHaveLength(800);
+  await page.locator('#navigation [data-view="methods"]').click();
+  const template = Prep.parse((await download(page, () => page.locator('#download-template').click(), testInfo, 'synthetic-validation-example.csv')).toString());
+  expect(template.rows).toHaveLength(200);
+  expect(template.columns).toEqual(data.columns);
 });
 
 test('standalone HTML supports local import, fitting and downloads without a database', async ({ page }, testInfo) => {
